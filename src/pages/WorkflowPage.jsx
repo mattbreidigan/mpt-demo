@@ -49,6 +49,7 @@ export default function WorkflowPage() {
   const [isParsing, setIsParsing] = useState(false)
   const [attemptedFillConfirm, setAttemptedFillConfirm] = useState(false)
   const [savedAt, setSavedAt] = useState('')
+  const [showDemoDescription, setShowDemoDescription] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
 
@@ -291,7 +292,7 @@ export default function WorkflowPage() {
     }
 
     try {
-      exportPdf(formValues)
+      exportPdf(templateFile, formValues, schema)
       setInfo('PDF exported successfully.')
     } catch (err) {
       setError(err.message)
@@ -381,6 +382,11 @@ export default function WorkflowPage() {
         <p className="eyebrow">MPT Report Generator</p>
         <h1>Smart Report Builder</h1>
         <p className="muted">Choose a template, detect placeholders, fill values, save drafts, and export.</p>
+        <div className="hero-actions">
+          <button type="button" className="button ghost" onClick={() => setShowDemoDescription((prev) => !prev)}>
+            {showDemoDescription ? 'Hide Demo Description' : 'View Demo Description'}
+          </button>
+        </div>
         <div className="flow-badges">
           <span className={`flow-badge ${hasTemplate ? 'done' : ''}`}>Template {hasTemplate ? 'Ready' : 'Pending'}</span>
           <span className={`flow-badge ${hasDetectedPlaceholders ? 'done' : ''}`}>
@@ -389,6 +395,37 @@ export default function WorkflowPage() {
           <span className={`flow-badge ${canExport ? 'done' : ''}`}>Export {canExport ? 'Ready' : 'Blocked'}</span>
         </div>
       </section>
+
+      {showDemoDescription ? (
+        <section className="card">
+          <h2>Demo Project Description</h2>
+          <p className="muted">
+            This demo shows a frontend-only workflow for a form-driven report builder with template-based exports.
+          </p>
+          <p className="muted">Built by Matt for client evaluation and workflow validation.</p>
+
+          <h2 style={{ marginTop: '0.8rem' }}>Implemented Features</h2>
+          <ul className="mini-list">
+            <li>Single-page guided flow: Template to Fill to Export</li>
+            <li>Upload template file or select a saved template</li>
+            <li>Detect placeholders directly from .docx template files</li>
+            <li>Edit detected field settings (required + field type: text/date/time)</li>
+            <li>Fill placeholder values manually</li>
+            <li>Save and load draft values for reuse</li>
+            <li>Validation for required fields in Fill flow</li>
+            <li>Export report to DOCX and PDF</li>
+          </ul>
+
+          <h2 style={{ marginTop: '0.8rem' }}>Not Included in This Demo</h2>
+          <ul className="mini-list">
+            <li>No backend or database (localStorage only)</li>
+            <li>No user authentication/authorization</li>
+            <li>No multi-user collaboration</li>
+            <li>No advanced template governance/version workflow</li>
+            <li>No strict production-grade validation rules per test standard</li>
+          </ul>
+        </section>
+      ) : null}
 
       <section className="stepper">
         {tabs.map((tab) => (

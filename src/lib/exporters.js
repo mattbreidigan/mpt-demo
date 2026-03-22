@@ -58,6 +58,22 @@ function writeWrappedText(doc, text, x, y, maxWidth, lineHeight = 7) {
   return y
 }
 
+function prettyLabel(key) {
+  return key
+    .replace(/[_.-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function decodeXmlEntities(text) {
+  return text
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+}
+
 function escapeXml(value) {
   return String(value)
     .replaceAll('&', '&amp;')
@@ -104,6 +120,27 @@ function replaceInXmlContent(content, formValues) {
   }
 
   return result
+}
+
+function extractParagraphLinesFromDocumentXml(xmlContent) {
+  const paragraphPattern = /<w:p\b[\s\S]*?<\/w:p>/g
+  const textNodePattern = /<w:t[^>]*>([\s\S]*?)<\/w:t>/g
+  const lines = []
+  let paragraphMatch = paragraphPattern.exec(xmlContent)
+
+  while (paragraphMatch) {
+    const paragraphXml = paragraphMatch[0]
+    let line = ''
+    let textMatch = textNodePattern.exec(paragraphXml)
+    while (textMatch) {
+      line += decodeXmlEntities(textMatch[1])
+      textMatch = textNodePattern.exec(paragraphXml)
+    }
+    lines.push(line.trim())
+    paragraphMatch = paragraphPattern.exec(xmlContent)
+  }
+
+  return lines
 }
 
 function exportDocxByXmlReplacement(templateFile, formValues) {
@@ -165,7 +202,7 @@ export function exportDocx(templateFile, formValues) {
   }
 }
 
-export function exportPdf(formValues) {
+export function exportPdf(templateFile, formValues, schema = []) {
   const renderData = buildRenderData(formValues)
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const margin = 15
@@ -178,17 +215,71 @@ export function exportPdf(formValues) {
   y += 10
 
   doc.setFontSize(11)
-  const entries = Object.entries(renderData)
-  if (entries.length === 0) {
+  let lines = []
+
+  if (templateFile?.base64) {
+    try {
+      const zip = new PizZip(fromBase64(templateFile.base64))
+      const docx = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+        delimiters: {
+          start: '{{',
+          end: '}}',
+        },
+        nullGetter: () => '',
+      })
+
+      docx.render(renderData)
+      const renderedZip = docx.getZip()
+      const renderedXml = renderedZip.file('word/document.xml')?.asText() || ''
+      if (renderedXml) {
+        lines = extractParagraphLinesFromDocumentXml(renderedXml)
+      }
+    } catch {
+      // Fallback to lightweight replacement when docx templating fails.
+      const zip = new PizZip(fromBase64(templateFile.base64))
+      const documentXmlFile = zip.file('word/document.xml')
+      const documentXml = documentXmlFile?.asText() || ''
+      if (documentXml) {
+        const filledXml = replaceInXmlContent(documentXml, renderData)
+        lines = extractParagraphLinesFromDocumentXml(filledXml)
+      }
+    }
+  }
+
+  if (lines.length === 0) {
+    const orderedEntries = []
+    const usedKeys = new Set()
+
+    if (Array.isArray(schema) && schema.length > 0) {
+      schema.forEach((field) => {
+        usedKeys.add(field.key)
+        orderedEntries.push({
+          key: field.key,
+          label: field.label || prettyLabel(field.key),
+          value: renderData[field.key] ?? '',
+        })
+      })
+    }
+
+    Object.entries(renderData).forEach(([key, value]) => {
+      if (usedKeys.has(key)) return
+      orderedEntries.push({ key, label: prettyLabel(key), value })
+    })
+
+    lines = orderedEntries.map(({ label, value }) => `${label}: ${value}`)
+  }
+
+  if (lines.length === 0) {
     y = writeWrappedText(doc, 'No values entered.', margin, y, maxWidth)
   } else {
-    entries.forEach(([key, value]) => {
+    lines.forEach((line) => {
       if (y > 280) {
         doc.addPage()
         y = margin
       }
-      const label = key.replace(/[_.-]+/g, ' ')
-      y = writeWrappedText(doc, `${label}: ${value}`, margin, y, maxWidth)
+      y = writeWrappedText(doc, line, margin, y, maxWidth)
     })
   }
 

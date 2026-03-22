@@ -56,6 +56,10 @@ body {
   margin-top: 0.75rem;
 }
 
+.hero-actions {
+  margin-top: 0.75rem;
+}
+
 .flow-badge {
   border: 1px solid var(--line);
   border-radius: 999px;
